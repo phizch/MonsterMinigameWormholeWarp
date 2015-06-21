@@ -882,7 +882,10 @@ function useAbilitiesAt100() {
 		advLog("At level % 100 = 0, forcing the use of a like new", 2);
 		tryUsingAbility(ABILITIES.LIKE_NEW, false, true); //like new
 
-
+		if (bHaveItem(ABILITIES.RAINING_GOLD)) { 
+			triggerAbility(ABILITIES.RAINING_GOLD);
+		}
+		
 		w.SteamDB_RainingGold_Timer = w.setInterval(function(){
 			if (getGameLevel() % 100 !== 0) {
 				// We're not on a *00 level anymore, stop!!
