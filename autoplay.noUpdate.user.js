@@ -718,6 +718,9 @@ function useAutoBadgePurchase() {
 		var abilityPriorityList = [
 			{ id: ABILITIES.WORMHOLE,   ratio: 0.5 },
 			{ id: ABILITIES.LIKE_NEW,   ratio: 1 },
+			{ id: ABILITIES.CRIT,       ratio: 1 },
+			{ id: ABILITIES.TREASURE,   ratio: 1 },
+			{ id: ABILITIES.PUMPED_UP,  ratio: 1 },
 		];
 	} else if (likeNewOn100 == 1) {
 		// Like New Buyers
@@ -725,12 +728,18 @@ function useAutoBadgePurchase() {
 			{ id: ABILITIES.WORMHOLE,   	ratio: 0 },
 			{ id: ABILITIES.RAINING_GOLD,	ratio: 0.33 },
 			{ id: ABILITIES.LIKE_NEW,   	ratio: 1 },
+			{ id: ABILITIES.CRIT,       	ratio: 1 },
+			{ id: ABILITIES.TREASURE,   	ratio: 1 },
+			{ id: ABILITIES.PUMPED_UP,  	ratio: 1 },
 		];
 	} else {
 		// Regular User Buy Ratio
 		var abilityPriorityList = [
 			{ id: ABILITIES.WORMHOLE,   ratio: 1 },
 			{ id: ABILITIES.LIKE_NEW,   ratio: 0 },
+			{ id: ABILITIES.CRIT,       ratio: 1 },
+			{ id: ABILITIES.TREASURE,   ratio: 1 },
+			{ id: ABILITIES.PUMPED_UP,  ratio: 1 },
 		];
 	}
 	
