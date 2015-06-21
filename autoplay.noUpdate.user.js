@@ -2,12 +2,12 @@
 // @name Ye Olde Megajump
 // @namespace https://github.com/YeOldeWH/MonsterMinigameWormholeWarp
 // @description A script that runs the Steam Monster Minigame for you.  Now with megajump.  Brought to you by the Ye Olde Wormhole Schemers and DannyDaemonic
-// @version 6.0.2
+// @version 7.0.3
 // @match *://steamcommunity.com/minigame/towerattack*
 // @match *://steamcommunity.com//minigame/towerattack*
 // @grant none
-// @updateURL https://raw.githubusercontent.com/YeOldeWH/MonsterMinigameWormholeWarp/team-like-newers/autoPlay.user.js
-// @downloadURL https://raw.githubusercontent.com/YeOldeWH/MonsterMinigameWormholeWarp/team-like-newers/autoPlay.user.js
+// @updateURL https://raw.githubusercontent.com/YeOldeWH/MonsterMinigameWormholeWarp/master/autoplay.noUpdate.user.js
+// @downloadURL https://raw.githubusercontent.com/YeOldeWH/MonsterMinigameWormholeWarp/master/autoplay.noUpdate.user.js
 // ==/UserScript==
 
 // IMPORTANT: Update the @version property above to a higher number such as 1.1 and 1.2 when you update the script! Otherwise, Tamper / Greasemonkey users will not update automatically.
@@ -20,7 +20,7 @@ var clickRate = 20;
 var logLevel = 1; // 5 is the most verbose, 0 disables all log
 
 var wormholeOn100 = 1;
-var likeNewOn100 = 1;
+var likeNewOn100 = 0;
 var medicOn100 = 1;
 var clicksOnBossLevel = 0;
 var upgThreshold = 100;
@@ -45,14 +45,20 @@ var disableRenderer = getPreferenceBoolean("disableRenderer", true);
 var enableTrollTrack = getPreferenceBoolean("enableTrollTrack", false);
 var enableElementLock = getPreferenceBoolean("enableElementLock", true);
 var enableAutoRefresh = getPreferenceBoolean("enableAutoRefresh", typeof GM_info !== "undefined");
+var enableChen = getPreferenceBoolean("enableChen", false);
 
-var autoRefreshMinutes = 30;
-var autoRefreshMinutesRandomDelay = 10;
+var autoRefreshMinutes = 15; // Lowering to 15 minutes
+var autoRefreshMinutesRandomDelay = 5; // Lowering to 5 minutes
 var autoRefreshSecondsCheckLoadedDelay = 30;
 
 var predictTicks = 0;
 var predictJumps = 0;
 var predictLastWormholesUpdate = 0;
+
+// Auto refresh handler delay
+var autoRefreshDuringBossDelayTotal = 0; // Total delay already passed
+var autoRefreshDuringBossDelay = 60000; // Delay during the boss (ms)
+var autoRefreshDuringBossDelayStep = 2500; // Delay 'step' (until we try again)
 
 // DO NOT MODIFY
 var isPastFirstRun = false;
@@ -60,8 +66,15 @@ var isAlreadyRunning = false;
 var refreshTimer = null;
 var currentClickRate = enableAutoClicker ? clickRate : 0;
 var lastLevel = 0;
-var lastLevelTimeTaken = [];
+var lastLevelTimeTaken = [{
+							level: 0,
+							levelsGained: 0,
+							timeStarted: 0,
+							timeTakenInSeconds: 0
+						 }];
 var approxYOWHClients = 0;
+var skipsLastJump = 0;
+var updateSkips = false;
 
 var trt_oldCrit = function() {};
 var trt_oldPush = function() {};
@@ -159,7 +172,7 @@ var CONTROL = {
 	speedThreshold: 2000,
 	rainingRounds: 100,
 	disableGoldRainLevels: 500,
-	rainingSafeRounds: 10
+	rainingSafeRounds: 9
 };
 
 var GAME_STATUS = {
@@ -168,9 +181,19 @@ var GAME_STATUS = {
 	OVER: 3
 };
 
+var wormholesUsedOnLevel = 0;
+
 // Try to disable particles straight away,
 // if not yet available, they will be disabled in firstRun
 disableParticles();
+
+// Define custom getters for document.hidden and the prefixed versions, so the game
+// doesn't stop ticking in the background.
+if (Object.defineProperty) {
+  var props = ['hidden', 'webkitHidden', 'mozHidden', 'msHidden'];
+  for (var i = 0; i < props.length; ++i)
+    Object.defineProperty(document, props[i], {value: false});
+}
 
 if(!getPreferenceBoolean("alertShown", false)) {
 	w.ShowAlertDialog(
@@ -236,7 +259,8 @@ function firstRun() {
 		// Align abilities to the left
 		"#abilitiescontainer {text-align: left;}",
 		// Activitylog and ability list
-		"#activeinlanecontainer:hover {height: auto; background: rgba(50,50,50,0.9); padding-bottom: 10px; position:absolute; z-index: 1;}",
+		"#activeinlanecontainer {padding-left: 10px;}",
+		"#activeinlanecontainer:hover {height: auto; background-image: radial-gradient(circle farthest-corner at 32px 0px, rgba(0,124,182,0.1), #11111C); padding-bottom: 10px; position:absolute; z-index: 1;}",
 		"#activeinlanecontainer:hover + #activitylog {margin-top: 88px;}",
 		"#activitylog {margin-top: 20px}",
 		// Hide leave game button
@@ -256,12 +280,19 @@ function firstRun() {
 		// Element lock box
 		".lock_elements_box {width: 165px; top: -76px; left: 303px; box-sizing: border-box; line-height: 1rem; padding: 7px 10px; position: absolute; color: #EDEDED;}",
 		// Breadcrumbs
+		".breadcrumbs {color: #bbb;}",
 		".bc_span {text-shadow: 1px 1px 0px rgba( 0, 0, 0, 0.3 );}",
-		".bc_room {color: #D4E157;}",
+		".bc_room {color: #ACE191;}",
 		".bc_level {color: #FFA07A;}",
 		".bc_time {color: #9AC0FF;}",
+		".bc_worms {color: #FFF79A;}",
+		// Adjustments for hard to see areas on the new background
+		"#upgradesscroll, #activityscroll {opacity: 0.75;}",
+		".teamhealth {background: rgba( 240, 240, 255, 0.2 );}",
+		"#upgrades .title_upgrates {color: #67C;}",
 		// Always show ability count
 		".abilitytemplate > a > .abilityitemquantity {visibility: visible; pointer-events: none;}",
+		".tv_ui {background-image: url(http://i.imgur.com/vM1gTFY.gif);}",
 		""
 	];
 	styleNode.textContent = styleText.join("");
@@ -283,64 +314,13 @@ function firstRun() {
 		document.body.style.backgroundPosition = "0 0";
 	}
 
-	CUI.prototype.UpdateLog = function( rgLaneLog ) {
-		var abilities = this.m_Game.m_rgTuningData.abilities;
-		var level = getGameLevel();
+	originalUpdateLog = CUI.prototype.UpdateLog;
 
-		if( !this.m_Game.m_rgPlayerTechTree ) return;
+	// Set to match preferences
+	toggleTrackTroll();
 
-		var nHighestTime = 0;
-
-		for( var i=rgLaneLog.length-1; i >= 0; i--) {
-			var rgEntry = rgLaneLog[i];
-
-			if( isNaN( rgEntry.time ) ) rgEntry.time = this.m_nActionLogTime + 1;
-
-			if( rgEntry.time <= this.m_nActionLogTime ) continue;
-
-			switch( rgEntry.type ) {
-				case 'ability':
-					if (window.enableTrollTrack) {
-						if ( (level % 100 !== 0 && [26].indexOf(rgEntry.ability) > -1) || (level % 100 === 0 && [10, 11, 12, 15, 20].indexOf(rgEntry.ability) > -1) ) {
-							var ele = this.m_eleUpdateLogTemplate.clone();
-							$J(ele).data('abilityid', rgEntry.ability);
-							$J('.name', ele).text(rgEntry.actor_name).attr("style", "color: red; font-weight: bold;");
-							$J('.ability', ele).text(abilities[rgEntry.ability].name + " on level " + level);
-							$J('img', ele).attr('src', g_rgIconMap['ability_' + rgEntry.ability].icon);
-
-							$J(ele).v_tooltip({tooltipClass: 'ta_tooltip', location: 'top'});
-
-							this.m_eleUpdateLogContainer[0].insertBefore(ele[0], this.m_eleUpdateLogContainer[0].firstChild);
-						
-							advLog(rgEntry.actor_name + " used " + s().m_rgTuningData.abilities[ rgEntry.ability ].name + " on level " + level, 1);
-						}
-					} else {
-						var ele = this.m_eleUpdateLogTemplate.clone();
-						$J(ele).data('abilityid', rgEntry.ability);
-						$J('.name', ele).text(rgEntry.actor_name);
-						$J('.ability', ele).text(abilities[rgEntry.ability].name);
-						$J('img', ele).attr('src', g_rgIconMap['ability_' + rgEntry.ability].icon);
-
-						$J(ele).v_tooltip({tooltipClass: 'ta_tooltip', location: 'top'});
-
-						this.m_eleUpdateLogContainer[0].insertBefore(ele[0], this.m_eleUpdateLogContainer[0].firstChild);
-					}
-					break;
-				default:
-					console.log("Unknown action log type: %s", rgEntry.type);
-					console.log(rgEntry);
-			}
-
-			if(rgEntry.time > nHighestTime) nHighestTime = rgEntry.time;
-		}
-
-		if( nHighestTime > this.m_nActionLogTime ) this.m_nActionLogTime = nHighestTime;
-
-		var e = this.m_eleUpdateLogContainer[0];
-		while(e.children.length > 20 ) {
-			e.children[e.children.length-1].remove();
-		}
-	};
+	// Add cool background
+	$J('body.flat_page.game').css('background-image', 'url(http://i.imgur.com/P8TB236.jpg)');
 
 	// Add "players in game" label
 	var titleActivity = document.querySelector( '.title_activity' );
@@ -366,6 +346,7 @@ function firstRun() {
 	options1.appendChild(makeCheckBox("removeCritText", "Remove crit text", removeCritText, toggleCritText, false));
 	options1.appendChild(makeCheckBox("removeAllText", "Remove all text", removeAllText, toggleAllText, false));
 	options1.appendChild(makeCheckBox("disableRenderer", "Limit frames per second to increase performance", disableRenderer, toggleRenderer, false));
+	options1.appendChild(makeCheckBox("enableChen", "Honk Honk?", enableChen, toggleChen, false));
 
 	info_box.appendChild(options1);
 
@@ -395,6 +376,62 @@ function firstRun() {
 
 	isPastFirstRun = true;
 }
+
+// Valve's update
+var originalUpdateLog = null;
+
+// The trolltrack
+var localUpdateLog = function( rgLaneLog ) {
+	var abilities = this.m_Game.m_rgTuningData.abilities;
+	var level = getGameLevel();
+
+	if( !this.m_Game.m_rgPlayerTechTree ) return;
+
+	var nHighestTime = 0;
+
+	for( var i=rgLaneLog.length-1; i >= 0; i--) {
+		var rgEntry = rgLaneLog[i];
+
+		if( isNaN( rgEntry.time ) ) rgEntry.time = this.m_nActionLogTime + 1;
+
+		if( rgEntry.time <= this.m_nActionLogTime ) continue;
+
+		// If performance concerns arise move the level check out and swap switch for if.
+		switch( rgEntry.type ) {
+			case 'ability':
+				if ( (level % 100 !== 0 && [26].indexOf(rgEntry.ability) > -1) || (level % 100 === 0 && [10, 11, 12, 15, 20].indexOf(rgEntry.ability) > -1) ) {
+					var ele = this.m_eleUpdateLogTemplate.clone();
+					$J(ele).data('abilityid', rgEntry.ability);
+					$J('.name', ele).text(rgEntry.actor_name).attr("style", "color: red; font-weight: bold;");
+					$J('.ability', ele).text(abilities[rgEntry.ability].name + " on level " + level);
+					$J('img', ele).attr('src', g_rgIconMap['ability_' + rgEntry.ability].icon);
+
+					$J(ele).v_tooltip({tooltipClass: 'ta_tooltip', location: 'top'});
+
+					this.m_eleUpdateLogContainer[0].insertBefore(ele[0], this.m_eleUpdateLogContainer[0].firstChild);
+				
+					advLog(rgEntry.actor_name + " used " + s().m_rgTuningData.abilities[ rgEntry.ability ].name + " on level " + level, 1);
+
+					if(rgEntry.ability == ABILITIES.WORMHOLE) {
+						wormholesUsedOnLevel++;
+					}
+				}
+				break;
+			default:
+				console.log("Unknown action log type: %s", rgEntry.type);
+				console.log(rgEntry);
+		}
+
+		if(rgEntry.time > nHighestTime) nHighestTime = rgEntry.time;
+	}
+
+	if( nHighestTime > this.m_nActionLogTime ) this.m_nActionLogTime = nHighestTime;
+
+	var e = this.m_eleUpdateLogContainer[0];
+	while(e.children.length > 20 ) {
+		e.children[e.children.length-1].remove();
+	}
+};
 
 function disableParticles() {
 	if (w.CSceneGame) {
@@ -452,12 +489,16 @@ function getTimeleft() {
 }
 
 function updateLevelTimeTracker() {
-	var currentLevel = (lastLevelTimeTaken[0] && lastLevelTimeTaken[0].level) || 0;
-
-	if (currentLevel !== getGameLevel()) {
+	if (lastLevelTimeTaken[0].level !== getGameLevel()) {
 		lastLevelTimeTaken.unshift({level: getGameLevel(),
+									levelsGained: -1,
 									timeStarted: s().m_rgGameData.timestamp,
-									timeTakenInSeconds: s().m_rgGameData.timestamp - s().m_rgGameData.timestamp_level_start});
+									timeTakenInSeconds: -1});
+
+		var previousLevel = lastLevelTimeTaken[1];
+
+		previousLevel.levelsGained = getGameLevel() - previousLevel.level;
+		previousLevel.timeTakenInSeconds = s().m_rgGameData.timestamp - previousLevel.timeStarted;
 	}
 
 	if (lastLevelTimeTaken.length > 10) {
@@ -481,9 +522,20 @@ function MainLoop() {
 
 	if (!isAlreadyRunning) {
 		isAlreadyRunning = true;
+		
+		if( level !== lastLevel ) {
+			// Clear any unsent abilities still in the queue when our level changes
+			s().m_rgAbilityQueue.clear();
+			// update skips if applicable
+			if (updateSkips) {
+				skipsLastJump = level - lastLevel;
+				updateSkips = false;
+			}
 
-		if ((level % 100 == 0) &&
-				(bHaveItem(ABILITIES.WORMHOLE) || bHaveItem(ABILITIES.LIKE_NEW) )) {
+			wormholesUsedOnLevel = 0;
+		}
+
+		if (level % 100 == 0) {
 			// On a WH level, jump everyone with wormholes to lane 0, unless there is a boss there, in which case jump to lane 1.
 			var targetLane = 0;
 			// Check lane 0, enemy 0 to see if it's a boss
@@ -493,6 +545,12 @@ function MainLoop() {
 				if(enemyType == ENEMY_TYPE.BOSS) {
 					advLog('In lane 0, there is a boss, avoiding', 4);
 					targetLane = 1;
+					var enemyDataLaneOne = s().GetEnemy(1, 0).m_data;
+					var enemyDataLaneTwo = s().GetEnemy(2, 0).m_data;
+					if(typeof enemyDataLaneOne != "undefined" && typeof enemyDataLaneTwo == "undefined"){
+						//Lane 1 has monsters. Lane 2 is empty. Switch to lane 2 instead.
+						targetLane = 2;
+					}	
 				}
 			}
 			if( s().m_rgPlayerData.current_lane != targetLane ) {
@@ -500,13 +558,9 @@ function MainLoop() {
 				s().TryChangeLane(targetLane); // put everyone in the same lane
 			}
 
+			updateSkips = true;
 		} else {
 			goToLaneWithBestTarget(level);
-		}
-		
-		if( level !== lastLevel ) {
-			// Clear any unsent abilities still in the queue when our level changes
-			s().m_rgAbilityQueue.clear();
 		}
 
 		attemptRespawn();
@@ -559,18 +613,19 @@ function MainLoop() {
 
 			absoluteCurrentClickRate = level > CONTROL.speedThreshold && (levelRainingMod === 0 || 3 >= (CONTROL.rainingRounds - levelRainingMod)) ? 0 : currentClickRate;
 
-			// throttle back as we approach
-			for(var i = 1; i <= 3; i++) {
-				if(levelRainingMod > CONTROL.rainingRounds - i) {
-					absoluteCurrentClickRate = Math.round(absoluteCurrentClickRate / 10);
+			var wormholesOnLine = getActiveAbilityLaneCount(ABILITIES.WORMHOLE);
+			var levelsUntilBoss = (CONTROL.rainingRounds - (level % CONTROL.rainingRounds));
+			if(levelsUntilBoss < 10 && (wormholesOnLine > levelsUntilBoss || wormholesUsedOnLevel > levelsUntilBoss)) {
+				advLog("Too much wormholes for throttle back. WH: " + wormholesOnLine + " / "+ wormholesUsedOnLevel+" > lvl: " + levelsUntilBoss, 4);
+				absoluteCurrentClickRate = currentClickRate;
+			}
+			else {
+				// throttle back as we approach
+				if(levelsUntilBoss < 5) {
+					absoluteCurrentClickRate = Math.round(currentClickRate * 0.1 * levelsUntilBoss);
 				}
 			}
 
-			var levelsUntilBoss = (CONTROL.rainingRounds - (level % CONTROL.rainingRounds))
-			if (levelsUntilBoss < 5 && Math.random < (0.9 / levelsUntilBoss)){
-				absoluteCurrentClickRate = clicksOnBossLevel;
-			}
-			
 			//If at the boss level, dont click at all
 			if (level % CONTROL.rainingRounds == 0) {
 				absoluteCurrentClickRate = clicksOnBossLevel;
@@ -764,8 +819,18 @@ function levelsPerSec() {
 		return 0;
 	}
 
-	return Math.round(((getGameLevel() - lastLevelTimeTaken.slice(-1).pop().level)
-			/ (s().m_rgGameData.timestamp - lastLevelTimeTaken.slice(-1).pop().timeStarted)) );
+	var timeSpentOnBosses = 0;
+	var levelsGainedFromBosses = 0;
+
+	lastLevelTimeTaken.filter(function(levelInfo) {
+		return isBossLevel(levelInfo.level);
+	}).map(function(levelInfo) {
+		timeSpentOnBosses += levelInfo.timeTakenInSeconds;
+		levelsGainedFromBosses += levelInfo.levelsGained;
+	})
+
+	return Math.round(((getGameLevel() - lastLevelTimeTaken.slice(-1).pop().level - levelsGainedFromBosses)
+			/ (s().m_rgGameData.timestamp - lastLevelTimeTaken.slice(-1).pop().timeStarted - timeSpentOnBosses)) * 1000 ) / 1000;
 }
 
 
@@ -774,6 +839,10 @@ function useAbilitiesAt100() {
 
 	if (wormholeOn100 && !w.SteamDB_Wormhole_Timer) {
 		advLog("At level % 100 = 0, forcing the use of wormholes nonstop", 2);
+
+		// Fire one off now, so we don't wait the interval
+		if (bHaveItem(ABILITIES.WORMHOLE)) triggerAbility(ABILITIES.WORMHOLE);
+
 		w.SteamDB_Wormhole_Timer = w.setInterval(function(){
 			if (getGameLevel() % 100 !== 0) {
 				// We're not on a *00 level anymore, stop!!
@@ -783,12 +852,39 @@ function useAbilitiesAt100() {
 			}
 			if (bHaveItem(ABILITIES.WORMHOLE)) triggerAbility(ABILITIES.WORMHOLE); //wormhole
 		}, 100);
+		/*  ^ DO NOT TOUCH THIS. The fundamental idea of this strat is that we get as many wormhole
+		  jumps in as we can when we hit a boss level. The server seems capable of taking a max of ~10wh/s
+		  feel free to use the following (hasty) code to manually verify in console:
+
+		  // 1. Note down number of remaining wormholes
+		  var dateStart = Date.now(); var interval = setInterval(function() { g_Server.UseAbilities($J.noop, $J.noop, {requested_abilities: [{ability: 26}]}); }, 100);
+		 
+		  // 2. Count 10 roughly 10 mississippi's (or however long you want), you will get the exact time taken between start and stop
+		  clearInterval(interval); console.log("Time: ", (dateStop - dateStart) / 1000);
+		  // => 13.002
+		  
+		  // 3. Click on any ability that can be used to refresh the abilities table from the server
+		  
+		  // 4. Subtract the old wormhole count from the new wormhole count and divide by the time taken to get wh/s
+
+		  Generally wh/s will be somewhere between 2-8 - I've never seen it go higher than 9.5, hence the 100ms resolution.
+		  Changing this to 50ms will not give you 20 wh/s.
+		  Changing this to 1000ms will leave wormholes on the table, so to speak.
+
+		  Yes, there will be overflow, but this a GOOD thing. a few wormholes that overflow and get us *closer* to the
+		  next level x00 boss helps!
+		 */
 	}
 	
 	//This should equate to approximately 1.8 Like News per second
 	if (likeNewOn100) {
 		advLog("At level % 100 = 0, forcing the use of a like new", 2);
 		tryUsingAbility(ABILITIES.LIKE_NEW, false, true); //like new
+	} else {
+		// if people have LIKE_NEWs, there's no harm in letting them use them
+		if (Math.random() <= 0.05) {
+			tryUsingAbility(ABILITIES.LIKE_NEW, false, true);
+		}
 	}
 	
 	if (medicOn100) {
@@ -1173,6 +1269,18 @@ function toggleRenderer(event) {
 	}
 }
 
+var oldTvBg = "";
+function toggleChen(event) {
+	enableChen = !enableChen;
+	if (enableChen) {
+		oldTvBg = w.$J('.tv_ui').css('background-image');
+		w.$J('.tv_ui').css('background-image', 'url(//i.imgur.com/QNSzdlS.png)');
+	} else {
+		w.$J('.tv_ui').css('background-image', oldTvBg);
+	}
+
+}
+
 function autoRefreshPage(autoRefreshMinutes){
 	var timerValue = (autoRefreshMinutes + autoRefreshMinutesRandomDelay * Math.random()) * 60 * 1000;
 	refreshTimer = setTimeout(function() {
@@ -1181,19 +1289,14 @@ function autoRefreshPage(autoRefreshMinutes){
 }
 
 function autoRefreshHandler() {
-	var enemyData = s().GetEnemy(s().m_rgPlayerData.current_lane, s().m_rgPlayerData.target).m_data;
-	if(typeof enemyData !== "undefined"){
-		var enemyType = enemyData.type;
-		if(enemyType != ENEMY_TYPE.BOSS) {
-			advLog('Refreshing, not boss', 5);
-			w.location.reload(true);
-		}else {
-			advLog('Not refreshing, A boss!', 5);
-			setTimeout(autoRefreshHandler, 3000);
-		}
-	}else{
-		//Wait until it is defined
-		setTimeout(autoRefreshHandler, 1000);
+	// Only skip on % 100 levels when it's been less than the maximum delay specified.
+	if(lastLevelTimeTaken[1].level % 100 === 0 && autoRefreshDuringBossDelayTotal < autoRefreshFirstBossDelay) {
+		advLog('Not refreshing (boss level)', 5);
+		autoRefreshDuringBossDelayTotal += autoRefreshFirstBossDelayStep;
+		setTimeout(autoRefreshHandler, autoRefreshFirstBossDelayStep);
+	} else {
+		advLog('Refreshing (not a boss level)', 5);
+		w.location.reload(true);
 	}
 }
 
@@ -1248,6 +1351,12 @@ function toggleTrackTroll(event) {
 
 	if(event !== undefined) {
 		value = handleCheckBox(event);
+	}
+
+	if(value) {
+		CUI.prototype.UpdateLog = localUpdateLog;
+	} else {
+		CUI.prototype.UpdateLog = originalUpdateLog;
 	}
 }
 
@@ -1904,6 +2013,7 @@ function tryUsingAbility(itemId, checkInLane, forceAbility) {
 	}
 
 	var level = getGameLevel();
+	var levelsPer = levelsPerSec();
 	var needs_to_be_blocked = false;
 	var two_digit_level = level % 100;
 
@@ -1912,12 +2022,18 @@ function tryUsingAbility(itemId, checkInLane, forceAbility) {
 	// must not use any damaging ability on boss levels
 	if (two_digit_level == 0 && needs_to_be_blocked) {
 		return false;
+	}
+
+	// don't let good luck charm run up to x100 levels
+	if (itemId === ABILITIES.GOOD_LUCK_CHARMS && two_digit_level + levelsPer * 20 > 100) {
+		return false;
+	}
 
 	// Randomly Don't use this ability when we're getting close to the boss
 	// This avoids overflow damage 
-	} else if (two_digit_level > 50 && needs_to_be_blocked) {
+	if (two_digit_level > 50 && needs_to_be_blocked) {
 		// Calculate current ability usage rate
-		var nextTickLevel = Math.ceil(level + levelsPerSec());
+		var nextTickLevel = Math.ceil(level + levelsPer);
 		var nextWHLevel = Math.ceil(nextTickLevel / 100)*100;
 		var abilityRate = Math.min( 1, Math.sqrt( nextWHLevel - nextTickLevel )/10 + minAbilityUsePercent );
 
@@ -1935,7 +2051,15 @@ function tryUsingAbility(itemId, checkInLane, forceAbility) {
 function triggerAbility(abilityId) {
 	if (abilityId === ABILITIES.WORMHOLE) {
 		// Fire this bad boy off immediately 
-		g_Server.UseAbilities($J.noop, $J.noop, {requested_abilities: [{ability: ABILITIES.WORMHOLE}]});
+		g_Server.UseAbilities(function() {
+			var wormholeButton = s().m_rgPlayerTechTree.ability_items.filter(function(item) { return item.ability === 26; })[0];
+			if (wormholeButton) {
+				wormholeButton.quantity--;
+			}
+		},
+		function() {
+			advLog('lost a wormhole :(', 2);
+		}, {requested_abilities: [{ability: ABILITIES.WORMHOLE}]});
 	} else {
 		s().m_rgAbilityQueue.push({'ability': abilityId});
 	}
@@ -2203,7 +2327,7 @@ function appendBreadcrumbsTitleInfo() {
 
 	element = document.createElement('span');
 	element.className = "bc_span bc_level";
-	element.textContent = 'Level: 0, Expected Level: 0, Likely Level: 0';
+	element.textContent = 'Level: 0';
 	breadcrumbs.appendChild(element);
 	ELEMENTS.ExpectedLevel = element;
 
@@ -2213,9 +2337,19 @@ function appendBreadcrumbsTitleInfo() {
 
 	element = document.createElement('span');
 	element.className = "bc_span bc_time";
-	element.textContent = 'Remaining Time: 0 hours, 0 minutes.';
+	element.textContent = 'Remaining Time: 0 hours, 0 minutes';
 	breadcrumbs.appendChild(element);
 	ELEMENTS.RemainingTime = element;
+	
+	element = document.createElement('span');
+	element.textContent = ' > ';
+	breadcrumbs.appendChild(element);
+
+	element = document.createElement('span');
+	element.className = "bc_span bc_worms";
+	element.textContent = 'Wormhole Activity: 0';
+	breadcrumbs.appendChild(element);
+	ELEMENTS.WormholesJumped = element;
 }
 
 function updateLevelInfoTitle(level)
@@ -2224,7 +2358,8 @@ function updateLevelInfoTitle(level)
 	var rem_time = countdown(exp_lvl.remaining_time);
 
 	ELEMENTS.ExpectedLevel.textContent = 'Level: ' + level + ', Levels/second: ' + levelsPerSec() + ', YOWHers: ' + (approxYOWHClients > 0 ? approxYOWHClients : '??');
-	ELEMENTS.RemainingTime.textContent = 'Remaining Time: ' + rem_time.hours + ' hours, ' + rem_time.minutes + ' minutes.';
+	ELEMENTS.RemainingTime.textContent = 'Remaining Time: ' + rem_time.hours + ' hours, ' + rem_time.minutes + ' minutes';
+	ELEMENTS.WormholesJumped.textContent = 'Wormhole Activity: ' + (skipsLastJump.toLocaleString ? skipsLastJump.toLocaleString() : skipsLastJump);
 }
 
 }(window));
