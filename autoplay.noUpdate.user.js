@@ -2,7 +2,7 @@
 // @name Ye Olde Megajump
 // @namespace https://github.com/YeOldeWH/MonsterMinigameWormholeWarp
 // @description A script that runs the Steam Monster Minigame for you.  Now with megajump.  Brought to you by the Ye Olde Wormhole Schemers and DannyDaemonic
-// @version 7.0.4
+// @version 7.0.5
 // @match *://steamcommunity.com/minigame/towerattack*
 // @match *://steamcommunity.com//minigame/towerattack*
 // @grant none
@@ -881,6 +881,23 @@ function useAbilitiesAt100() {
 	if (likeNewOn100) {
 		advLog("At level % 100 = 0, forcing the use of a like new", 2);
 		tryUsingAbility(ABILITIES.LIKE_NEW, false, true); //like new
+
+		if (bHaveItem(ABILITIES.RAINING_GOLD)) { 
+			triggerAbility(ABILITIES.RAINING_GOLD);
+		}
+		
+		w.SteamDB_RainingGold_Timer = w.setInterval(function(){
+			if (getGameLevel() % 100 !== 0) {
+				// We're not on a *00 level anymore, stop!!
+				w.clearInterval(w.SteamDB_RainingGold_Timer);
+				w.SteamDB_RainingGold_Timer = false;
+				return;
+			}
+			
+			if (bHaveItem(ABILITIES.RAINING_GOLD)) { 
+				triggerAbility(ABILITIES.RAINING_GOLD);
+			}
+		}, 3000);
 	} else {
 		// if people have LIKE_NEWs, there's no harm in letting them use them
 		if (Math.random() <= 0.05) {
