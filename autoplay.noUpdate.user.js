@@ -66,12 +66,14 @@ var isAlreadyRunning = false;
 var refreshTimer = null;
 var currentClickRate = enableAutoClicker ? clickRate : 0;
 var lastLevel = 0;
-var lastLevelTimeTaken = [{
-							level: 0,
-							levelsGained: 0,
-							timeStarted: 0,
-							timeTakenInSeconds: 0
-						 }];
+var lastLevelInfo = [{
+						level: 0,
+						levelsGained: 0,
+						timeStarted: 0,
+						timeTakenInSeconds: 0
+					}];
+var _previousEnemyHP = [0];
+var _previousDPS = [0];
 var approxYOWHClients = 0;
 var skipsLastJump = 0;
 var updateSkips = false;
@@ -491,22 +493,72 @@ function getTimeleft() {
 	return 61;
 }
 
-function updateLevelTimeTracker() {
-	if (lastLevelTimeTaken[0].level !== getGameLevel()) {
-		lastLevelTimeTaken.unshift({level: getGameLevel(),
-									levelsGained: -1,
-									timeStarted: s().m_rgGameData.timestamp,
-									timeTakenInSeconds: -1});
+function unshiftIntoCircularBuffer(buffer, bufferSize, value) {
+	buffer.unshift(value);
 
-		var previousLevel = lastLevelTimeTaken[1];
+	if (buffer.length > bufferSize) {
+		buffer.pop();
+	}
+}
+
+function updateLevelAndDPSTracker() {
+	var levelHasChanged = lastLevelInfo[0].level !== getGameLevel();
+	if (levelHasChanged) {
+		unshiftIntoCircularBuffer(lastLevelInfo, 10, 
+							{	level: 				getGameLevel(),
+								levelsGained: 		-1,
+								timeStarted: 		s().m_rgGameData.timestamp,
+								timeTakenInSeconds: -1,
+								total_enemy_hp: 	getTotalLevelEnemyStats().max_hp,
+								level_dps: 			0
+							});
+
+		var previousLevel = lastLevelInfo[1];
 
 		previousLevel.levelsGained = getGameLevel() - previousLevel.level;
 		previousLevel.timeTakenInSeconds = s().m_rgGameData.timestamp - previousLevel.timeStarted;
 	}
 
-	if (lastLevelTimeTaken.length > 10) {
-		lastLevelTimeTaken.pop();
+	// This is a weird place for this I know, but I couldn't think of anywhere better in my sleep deprived state
+	updateCurrentDPS(levelHasChanged);
+
+	if (levelHasChanged) {
+		previousLevel.level_dps = getAverageDPS();
 	}
+}
+
+function updateCurrentDPS(levelHasChanged) {
+	var skipped_dps = 0;
+
+	if (levelHasChanged) {
+		var previousLevel = lastLevelInfo[1];
+		var skipped_dps = (previousLevel.levelsGained * previousLevel.total_enemy_hp) / previousLevel.timeTakenInSeconds;
+	}
+
+	var current_hp = getTotalLevelEnemyStats().current_hp;
+	var dps = Math.max(current_hp - _previousEnemyHP[0], 0);
+
+	unshiftIntoCircularBuffer(_previousDPS, 10, (dps + skipped_dps) || 0);
+	unshiftIntoCircularBuffer(_previousEnemyHP, 10, current_hp);
+}
+
+function getAverageDPS() {
+	return _previousDPS.reduce(function (a, b) {
+			return a + b;
+		}) / _previousDPS.length;
+}
+
+function getTotalLevelEnemyStats() {
+	var current_hp = 0;
+	var max_hp = 0;
+	s().m_rgGameData.lanes.map(function (lane) {
+		lane.enemies.map(function(enemy) {
+    		current_hp += enemy.hp
+    		max_hp += enemy.max_hp
+  		});
+	});
+
+	return {current_hp: current_hp, max_hp: max_hp}
 }
 
 function MainLoop() {
@@ -2360,7 +2412,7 @@ function updateLevelInfoTitle(level)
 	var exp_lvl = expectedLevel(level);
 	var rem_time = countdown(exp_lvl.remaining_time);
 
-	ELEMENTS.ExpectedLevel.textContent = 'Level: ' + level + ', Levels/second: ' + levelsPerSec() + ', YOWHers: ' + (approxYOWHClients > 0 ? approxYOWHClients : '??');
+	ELEMENTS.ExpectedLevel.textContent = 'Level: ' + level + ', Levels/second: ' + levelsPerSec();
 	ELEMENTS.RemainingTime.textContent = 'Remaining Time: ' + rem_time.hours + ' hours, ' + rem_time.minutes + ' minutes';
 	ELEMENTS.WormholesJumped.textContent = 'Wormhole Activity: ' + (skipsLastJump.toLocaleString ? skipsLastJump.toLocaleString() : skipsLastJump);
 }
