@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name Ye Olde Megajump (Auto-updating)
+// @name Ye Olde Megajump LNers (Auto-updating)
 // @namespace https://github.com/YeOldeWH/MonsterMinigameWormholeWarp
 // @description A script that runs the Steam Monster Minigame for you.  Now with megajump.  Brought to you by the Ye Olde Wormhole Schemers and DannyDaemonic
 // @version 6.0.3
