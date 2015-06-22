@@ -2551,7 +2551,7 @@ function updateLevelInfoTitle(level)
 											', Prediction Accuracy: ' + Math.round(getPredictedLevelAccuracy() * 100) + "%" +
 											', Version Levels/s: ' + Math.round(getLevelsPerSecondSinceStart()) +
 											', WH/Boss: ' + Math.round(averageWormholesPerBoss()) +
-											', Boss\'/s: ' + averageBossesPerSecond()
+											', Seconds/Boss\': ' + Math.round(1 / averageBossesPerSecond())
 	ELEMENTS.RemainingTime.textContent = 'Remaining Time: ' + rem_time.hours + ' hours, ' + rem_time.minutes + ' minutes';
 	ELEMENTS.WormholesJumped.textContent = 'Wormhole Activity: ' + (skipsLastJump.toLocaleString ? skipsLastJump.toLocaleString() : skipsLastJump);
 }
