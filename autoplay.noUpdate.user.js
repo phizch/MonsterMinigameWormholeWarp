@@ -1336,7 +1336,7 @@ function autoRefreshHandler() {
 	
 	
 	// Only skip on % 100 levels when it's been less than the maximum delay specified.
-	if(lastLevelTimeTaken[1].level % 100 === 0 && autoRefreshDuringBossDelayTotal < autoRefreshDuringBossDelay) {
+	if(getGameLevel() % 100 === 0 && autoRefreshDuringBossDelayTotal < autoRefreshDuringBossDelay) {
 		advLog('Not refreshing (boss level)', 5);
 		autoRefreshDuringBossDelayTotal += autoRefreshDuringBossDelayStep;
 		setTimeout(autoRefreshHandler, autoRefreshDuringBossDelayStep);
