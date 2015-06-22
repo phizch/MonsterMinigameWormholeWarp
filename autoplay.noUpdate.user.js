@@ -629,9 +629,16 @@ function MainLoop() {
 				absoluteCurrentClickRate = currentClickRate;
 			}
 			else {
+				absoluteCurrentClickRate = currentClickRate;
+
 				// throttle back as we approach
-				if(levelsUntilBoss < 5) {
-					absoluteCurrentClickRate = Math.round(currentClickRate * 0.1 * levelsUntilBoss);
+				var levelsPer = levelsPerSecRaw();
+				if (level > 100000 && levelsPer != 0) { // sanity check
+				
+					var ticksTillBoss = (level % 100) / levelsPerSec()
+					if (ticksTillBoss <= 15) {
+						absoluteCurrentClickRate = Math.round(currentClickRate * (Math.pow(1.333, -ticksTillBoss) * 39 / 40 + 0.1));
+					}
 				}
 			}
 
@@ -821,6 +828,25 @@ function updateApproxYOWHClients() {
 						", lastLevelTimeTaken", lastLevelTimeTaken);
 		}
 	}
+}
+
+function levelsPerSecRaw() {
+	if (lastLevelTimeTaken.length < 2) {
+		return 0;
+	}
+
+	var timeSpentOnBosses = 0;
+	var levelsGainedFromBosses = 0;
+
+	lastLevelTimeTaken.filter(function(levelInfo) {
+		return isBossLevel(levelInfo.level);
+	}).map(function(levelInfo) {
+		timeSpentOnBosses += levelInfo.timeTakenInSeconds;
+		levelsGainedFromBosses += levelInfo.levelsGained;
+	})
+
+	return (((getGameLevel() - lastLevelTimeTaken.slice(-1).pop().level - levelsGainedFromBosses)
+			/ (s().m_rgGameData.timestamp - lastLevelTimeTaken.slice(-1).pop().timeStarted - timeSpentOnBosses)) * 1000 ) / 1000;
 }
 
 function levelsPerSec() {
