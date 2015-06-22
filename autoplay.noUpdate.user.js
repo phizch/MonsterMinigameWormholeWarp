@@ -637,7 +637,7 @@ function MainLoop() {
 				
 					var ticksTillBoss = (level % 100) / levelsPerSec()
 					if (ticksTillBoss <= 15) {
-						absoluteCurrentClickRate = Math.round(currentClickRate * (Math.pow(1.333, -ticksTillBoss) * 39 / 40 + 0.1));
+						absoluteCurrentClickRate = Math.round(currentClickRate * (Math.pow(1.333, -(15-ticksTillBoss)) * 39 / 40 + 0.1));
 					}
 				}
 			}
