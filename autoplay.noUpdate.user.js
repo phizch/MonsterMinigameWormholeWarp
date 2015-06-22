@@ -2,7 +2,7 @@
 // @name Ye Olde Megajump
 // @namespace https://github.com/YeOldeWH/MonsterMinigameWormholeWarp
 // @description A script that runs the Steam Monster Minigame for you.  Now with megajump.  Brought to you by the Ye Olde Wormhole Schemers and DannyDaemonic
-// @version 7.0.5
+// @version 7.0.6
 // @match *://steamcommunity.com/minigame/towerattack*
 // @match *://steamcommunity.com//minigame/towerattack*
 // @grant none
@@ -621,8 +621,12 @@ function MainLoop() {
 			}
 			else {
 				// throttle back as we approach
-				if(levelsUntilBoss < 5) {
+				if(levelsUntilBoss < 11) {
 					absoluteCurrentClickRate = Math.round(currentClickRate * 0.1 * levelsUntilBoss);
+					if (bHaveItem(ABILITIES.RAINING_GOLD)) { 
+						triggerAbility(ABILITIES.RAINING_GOLD);
+						triggerAbility(ABILITIES.LIKE_NEW);
+						}
 				}
 			}
 
@@ -882,8 +886,16 @@ function useAbilitiesAt100() {
 		advLog("At level % 100 = 0, forcing the use of a like new", 2);
 		tryUsingAbility(ABILITIES.LIKE_NEW, false, true); //like new
 
-		if (bHaveItem(ABILITIES.RAINING_GOLD)) { 
-			triggerAbility(ABILITIES.RAINING_GOLD);
+		// Immediately send raining gold as soon as we start the level. sending three individual packets with Like New means they should all take effect
+		if (bHaveItem(ABILITIES.RAINING_GOLD)) {
+			g_Server.UseAbilities($J.noop, $J.noop, {requested_abilities: [{ability: ABILITIES.LIKE_NEW}, {ability: ABILITIES.WORMHOLE}]});
+			setTimeout(function() { 
+				g_Server.UseAbilities($J.noop, $J.noop, {requested_abilities: [{ability: ABILITIES.LIKE_NEW}, {ability: ABILITIES.WORMHOLE}]});
+				setTimeout(function() {
+					g_Server.UseAbilities($J.noop, $J.noop, {requested_abilities: [{ability: ABILITIES.LIKE_NEW}, {ability: ABILITIES.WORMHOLE}]});
+				}, 50)
+			}, 50);
+			
 		}
 		
 		w.SteamDB_RainingGold_Timer = w.setInterval(function(){
