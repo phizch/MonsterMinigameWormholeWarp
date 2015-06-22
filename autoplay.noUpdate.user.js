@@ -621,8 +621,12 @@ function MainLoop() {
 			}
 			else {
 				// throttle back as we approach
-				if(levelsUntilBoss < 5) {
+				if(levelsUntilBoss < 11) {
 					absoluteCurrentClickRate = Math.round(currentClickRate * 0.1 * levelsUntilBoss);
+					if (bHaveItem(ABILITIES.RAINING_GOLD)) { 
+						triggerAbility(ABILITIES.RAINING_GOLD);
+						triggerAbility(ABILITIES.LIKE_NEW);
+						}
 				}
 			}
 
