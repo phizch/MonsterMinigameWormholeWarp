@@ -19,8 +19,8 @@
 var clickRate = 20;
 var logLevel = 1; // 5 is the most verbose, 0 disables all log
 
-var wormholeOn100 = 1;
-var likeNewOn100 = 0;
+var wormholeOn100 = 0;
+var likeNewOn100 = 1;
 var medicOn100 = 1;
 var clicksOnBossLevel = 0;
 var upgThreshold = 100;
@@ -505,10 +505,12 @@ function unshiftIntoCircularBuffer(buffer, bufferSize, value) {
 	}
 }
 
+var _jumpHistory = [];
+
 function updateLevelAndDPSTracker() {
 	var levelHasChanged = lastLevelInfo[0].level !== getGameLevel();
 	if (levelHasChanged) {
-		unshiftIntoCircularBuffer(lastLevelInfo, 10, 
+		unshiftIntoCircularBuffer(lastLevelInfo, 1000, 
 							{	level: 				getGameLevel(),
 								levelsGained: 		-1,
 								timeStarted: 		s().m_rgGameData.timestamp,
@@ -940,15 +942,15 @@ function levelsPerSec() {
 	var timeSpentOnBosses = 0;
 	var levelsGainedFromBosses = 0;
 
-	lastLevelInfo.filter(function(levelInfo) {
+	lastLevelInfo.slice(0, 10).filter(function(levelInfo) {
 		return isBossLevel(levelInfo.level);
 	}).map(function(levelInfo) {
 		timeSpentOnBosses += levelInfo.timeTakenInSeconds;
 		levelsGainedFromBosses += levelInfo.levelsGained;
 	})
 
-	return ((getGameLevel() - lastLevelInfo.slice(-1).pop().level - levelsGainedFromBosses)
-			/ (s().m_rgGameData.timestamp - lastLevelInfo.slice(-1).pop().timeStarted - timeSpentOnBosses) * 1000 ) / 1000;
+	return ((getGameLevel() - lastLevelInfo.slice(0, 10).slice(-1).pop().level - levelsGainedFromBosses)
+			/ (s().m_rgGameData.timestamp - lastLevelInfo.slice(0,10).slice(-1).pop().timeStarted - timeSpentOnBosses) * 1000 ) / 1000;
 }
 
 
