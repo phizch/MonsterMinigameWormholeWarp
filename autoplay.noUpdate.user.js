@@ -616,7 +616,6 @@ function averageWormholesPerBoss() {
 function averageBossesPerSecond() {
 	var bosses = lastLevelInfo.filter(function(i) { return isBossLevel(i.level); })
 	if (bosses.length > 1) {
-		debugger;
 		return (bosses.length / (bosses[0].timeStarted - bosses[bosses.length-1].timeStarted));
 	}
 
