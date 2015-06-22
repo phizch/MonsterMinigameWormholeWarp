@@ -506,7 +506,7 @@ function unshiftIntoCircularBuffer(buffer, bufferSize, value) {
 }
 
 var _jumpHistory = [];
-
+var defaultEntryRemoved = false;
 function updateLevelAndDPSTracker() {
 	var levelHasChanged = lastLevelInfo[0].level !== getGameLevel();
 	if (levelHasChanged) {
@@ -530,6 +530,11 @@ function updateLevelAndDPSTracker() {
 
 	if (levelHasChanged) {
 		previousLevel.level_dps = getAverageDPS();
+
+		if (!defaultEntryRemoved) {
+			defaultEntryRemoved = true;
+			lastLevelInfo.pop();
+		}
 	}
 }
 
@@ -603,6 +608,26 @@ function getLevelForTick(tick) {
 	return 0;
 }
 
+function averageWormholesPerBoss() {
+	var bosses = lastLevelInfo.filter(function(i) { return isBossLevel(i.level); })
+	return bosses.map(function(i) { return i.levelsGained }).reduce(function(curr, level) { return curr + level}, 0) / bosses.length
+}
+
+function averageBossesPerSecond() {
+	var bosses = lastLevelInfo.filter(function(i) { return isBossLevel(i.level); })
+	if (bosses.length > 1) {
+		debugger;
+		return (bosses.length / (bosses[0].timeStarted - bosses[bosses.length-1].timeStarted));
+	}
+
+	return 0;
+}
+
+var scriptStartedInfo = {level: 0, time: 0};
+function getLevelsPerSecondSinceStart() {
+	return (getGameLevel() - scriptStartedInfo.level) / (s().m_rgGameData.timestamp - scriptStartedInfo.time);
+}
+
 function getNextPredictedLevel() {
 	var levelVelocity = Math.round(_tickInfo
 			.filter(function(i) { return i.level === getGameLevel(); })
@@ -635,6 +660,11 @@ function MainLoop() {
 	updateLevelAndDPSTracker();
 	updateApproxYOWHClients();
 	updateNextLevelPrediction();
+
+	if (scriptStartedInfo.level === 0) {
+		scriptStartedInfo.level = level;
+		scriptStartedInfo.time = s().m_rgGameData.timestamp;
+	}
 
 	if (!isAlreadyRunning) {
 		isAlreadyRunning = true;
@@ -2517,7 +2547,12 @@ function updateLevelInfoTitle(level)
 	var exp_lvl = expectedLevel(level);
 	var rem_time = countdown(exp_lvl.remaining_time);
 
-	ELEMENTS.ExpectedLevel.textContent = 'Level: ' + level + ', Levels/second: ' + levelsPerSec() + ', Prediction Accuracy: ' + Math.round(getPredictedLevelAccuracy() * 100) + "%";
+	ELEMENTS.ExpectedLevel.textContent = 	'Level: ' + level + 
+											', Levels/second: ' + Math.round(levelsPerSec() * 1000) / 1000 + 
+											', Prediction Accuracy: ' + Math.round(getPredictedLevelAccuracy() * 100) + "%" +
+											', Version Levels/s: ' + Math.round(getLevelsPerSecondSinceStart()) +
+											', WH/Boss: ' + Math.round(averageWormholesPerBoss()) +
+											', Boss\'/s: ' + averageBossesPerSecond()
 	ELEMENTS.RemainingTime.textContent = 'Remaining Time: ' + rem_time.hours + ' hours, ' + rem_time.minutes + ' minutes';
 	ELEMENTS.WormholesJumped.textContent = 'Wormhole Activity: ' + (skipsLastJump.toLocaleString ? skipsLastJump.toLocaleString() : skipsLastJump);
 }
