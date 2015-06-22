@@ -1843,6 +1843,9 @@ function goToLaneWithBestTarget(level) {
 	} else {
 		enableAbility(ABILITIES.RAINING_GOLD);
 	}
+
+	// Completely disable Reflect
+	disableAbility(ABILITIES.REFLECT_DAMAGE);
 }
 
 function hasMaxCriticalOnLane() {
