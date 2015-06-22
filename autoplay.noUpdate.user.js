@@ -44,11 +44,11 @@ var enableFingering = getPreferenceBoolean("enableFingering", true);
 var disableRenderer = getPreferenceBoolean("disableRenderer", true);
 var enableTrollTrack = getPreferenceBoolean("enableTrollTrack", false);
 var enableElementLock = getPreferenceBoolean("enableElementLock", true);
-var enableAutoRefresh = getPreferenceBoolean("enableAutoRefresh", typeof GM_info !== "undefined");
+var enableAutoRefresh = true;
 var enableChen = getPreferenceBoolean("enableChen", false);
 
-var autoRefreshMinutes = 15; // Lowering to 15 minutes
-var autoRefreshMinutesRandomDelay = 5; // Lowering to 5 minutes
+var autoRefreshMinutes = 30;
+var autoRefreshMinutesRandomDelay = 10;
 var autoRefreshSecondsCheckLoadedDelay = 30;
 
 var predictTicks = 0;
