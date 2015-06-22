@@ -1333,11 +1333,13 @@ function autoRefreshPage(autoRefreshMinutes){
 }
 
 function autoRefreshHandler() {
+	
+	
 	// Only skip on % 100 levels when it's been less than the maximum delay specified.
-	if(lastLevelTimeTaken[1].level % 100 === 0 && autoRefreshDuringBossDelayTotal < autoRefreshFirstBossDelay) {
+	if(getGameLevel() % 100 === 0 && autoRefreshDuringBossDelayTotal < autoRefreshDuringBossDelay) {
 		advLog('Not refreshing (boss level)', 5);
-		autoRefreshDuringBossDelayTotal += autoRefreshFirstBossDelayStep;
-		setTimeout(autoRefreshHandler, autoRefreshFirstBossDelayStep);
+		autoRefreshDuringBossDelayTotal += autoRefreshDuringBossDelayStep;
+		setTimeout(autoRefreshHandler, autoRefreshDuringBossDelayStep);
 	} else {
 		advLog('Refreshing (not a boss level)', 5);
 		w.location.reload(true);
